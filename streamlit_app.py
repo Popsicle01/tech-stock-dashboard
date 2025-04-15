@@ -1,8 +1,9 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
-import matplotlib.pyplot as plt
+import plotly.graph_objects as go
 import seaborn as sns
+import matplotlib.pyplot as plt
 
 st.set_page_config(layout='wide')
 st.title("📈 Tech Stocks Dashboard (2020 - 2024)")
@@ -12,7 +13,7 @@ tech_stocks = ['AAPL', 'MSFT', 'AMZN', 'GOOG']
 show_ma = st.sidebar.checkbox("Show Moving Averages (20 & 50 Day)", value=True)
 show_volatility = st.sidebar.checkbox("Show 30-Day Volatility", value=False)
 
-# Load data (cache to speed up app)
+# Load data
 @st.cache_data
 def load_data():
     data = yf.download(tech_stocks, start="2020-01-01", end="2025-01-01")['Close']
@@ -20,49 +21,67 @@ def load_data():
 
 data = load_data()
 
-st.subheader("📊 Stock Prices")
+st.subheader("📊 Interactive Price Charts")
 
-# Grid layout for stock price charts
-cols = st.columns(2)
-for i, stock in enumerate(tech_stocks):
-    with cols[i % 2]:
-        fig, ax = plt.subplots(figsize=(6, 3))
-        ax.plot(data[stock], label=f"{stock} Price")
-        ax.set_title(f"{stock} Closing Price")
-
-        if show_ma:
-            ma20 = data[stock].rolling(window=20).mean()
-            ma50 = data[stock].rolling(window=50).mean()
-            ax.plot(ma20, label="20-Day MA", linestyle='--')
-            ax.plot(ma50, label="50-Day MA", linestyle='--')
-
-        ax.set_xlabel("Date")
-        ax.set_ylabel("Price (USD)")
-        ax.legend()
-        st.pyplot(fig)
+# --- Grid layout for charts ---
+for i in range(0, len(tech_stocks), 2):
+    cols = st.columns(2)
+    for j in range(2):
+        if i + j < len(tech_stocks):
+            stock = tech_stocks[i + j]
+            with cols[j]:
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(x=data.index, y=data[stock], name=f"{stock} Price", line=dict(color='blue')))
+                if show_ma:
+                    fig.add_trace(go.Scatter(
+                        x=data.index,
+                        y=data[stock].rolling(20).mean(),
+                        name="20-Day MA",
+                        line=dict(dash='dot', color='orange')
+                    ))
+                    fig.add_trace(go.Scatter(
+                        x=data.index,
+                        y=data[stock].rolling(50).mean(),
+                        name="50-Day MA",
+                        line=dict(dash='dot', color='green')
+                    ))
+                fig.update_layout(
+                    title=f"{stock} Closing Price",
+                    xaxis_title="Date",
+                    yaxis_title="Price (USD)",
+                    margin=dict(l=20, r=20, t=40, b=20),
+                    height=350,
+                    showlegend=True
+                )
+                st.plotly_chart(fig, use_container_width=True)
 
 st.divider()
 
-# Correlation Heatmap
+# --- Correlation heatmap (still with matplotlib for now) ---
 st.subheader("📈 Correlation Heatmap Between Stocks")
 fig_corr, ax_corr = plt.subplots(figsize=(6, 4))
-corr = data.corr()
-sns.heatmap(corr, annot=True, cmap='coolwarm', ax=ax_corr)
+sns.heatmap(data.corr(), annot=True, cmap='coolwarm', ax=ax_corr)
 st.pyplot(fig_corr)
 
 st.divider()
 
-# Volatility Charts
+# --- Volatility Charts ---
 if show_volatility:
     st.subheader("📉 30-Day Rolling Volatility")
-    cols_vol = st.columns(2)
-    for i, stock in enumerate(tech_stocks):
-        with cols_vol[i % 2]:
-            vol = data[stock].rolling(window=30).std()
-            fig_vol, ax_vol = plt.subplots(figsize=(6, 3))
-            ax_vol.plot(vol, label="Volatility")
-            ax_vol.set_title(f"{stock} Volatility")
-            ax_vol.set_xlabel("Date")
-            ax_vol.set_ylabel("Std Dev")
-            ax_vol.legend()
-            st.pyplot(fig_vol)
+    for i in range(0, len(tech_stocks), 2):
+        cols = st.columns(2)
+        for j in range(2):
+            if i + j < len(tech_stocks):
+                stock = tech_stocks[i + j]
+                with cols[j]:
+                    vol = data[stock].rolling(30).std()
+                    fig_vol = go.Figure()
+                    fig_vol.add_trace(go.Scatter(x=vol.index, y=vol, name="Volatility", line=dict(color='purple')))
+                    fig_vol.update_layout(
+                        title=f"{stock} Volatility (30-Day Std Dev)",
+                        xaxis_title="Date",
+                        yaxis_title="Volatility",
+                        height=300,
+                        margin=dict(l=20, r=20, t=40, b=20)
+                    )
+                    st.plotly_chart(fig_vol, use_container_width=True)
